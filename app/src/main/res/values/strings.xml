@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YT Downloader</string>
+    <string name="paste_url_hint">Paste YouTube URL…</string>
+    <string name="btn_fetch">Fetch</string>
+    <string name="btn_paste">Paste</string>
+    <string name="btn_clear">Clear</string>
+    <string name="btn_download">Download</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_open">Open</string>
+    <string name="btn_share">Share</string>
+    <string name="btn_delete">Delete</string>
+    <string name="btn_retry">Retry</string>
+    <string name="active_downloads">Active Downloads</string>
+    <string name="no_downloads">No downloads yet</string>
+    <string name="history_empty">Your download history is empty</string>
+    <string name="select_quality">Select Quality</string>
+    <string name="channel">Channel</string>
+    <string name="duration">Duration</string>
+    <string name="loading">Loading…</string>
+    <string name="initializing">Initializing yt-dlp…</string>
+    <string name="tab_all">All</string>
+    <string name="tab_completed">Completed</string>
+    <string name="tab_failed">Failed</string>
+</resources>

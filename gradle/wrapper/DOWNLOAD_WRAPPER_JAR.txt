@@ -1,0 +1,11 @@
+The gradle-wrapper.jar must be present here.
+Run this from the project root to generate it automatically:
+
+  gradle wrapper --gradle-version 8.4
+
+OR download directly:
+  curl -Lo gradle/wrapper/gradle-wrapper.jar \
+    https://github.com/gradle/gradle/raw/v8.4.0/gradle/wrapper/gradle-wrapper.jar
+
+It is NOT included in this project for size/license reasons.
+Most IDEs (Android Studio) will offer to download it automatically on first open.

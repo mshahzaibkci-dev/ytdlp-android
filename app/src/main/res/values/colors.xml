@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand -->
+    <color name="colorPrimary">#FF0000</color>
+    <color name="colorPrimaryDark">#CC0000</color>
+    <color name="colorPrimaryVariant">#B71C1C</color>
+    <color name="colorSecondary">#212121</color>
+    <color name="colorSecondaryVariant">#424242</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorOnSecondary">#FFFFFF</color>
+
+    <!-- Backgrounds -->
+    <color name="background">#121212</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="surface_variant">#2C2C2C</color>
+    <color name="card_background">#1E1E1E</color>
+
+    <!-- Text -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#B3FFFFFF</color>
+    <color name="text_hint">#66FFFFFF</color>
+
+    <!-- Status colors -->
+    <color name="status_completed">#2E7D32</color>
+    <color name="status_failed">#C62828</color>
+    <color name="status_cancelled">#E65100</color>
+    <color name="status_downloading">#1565C0</color>
+
+    <!-- Format selection -->
+    <color name="format_selected_bg">#33FF0000</color>
+
+    <!-- Progress -->
+    <color name="progress_track">#3DFF0000</color>
+    <color name="progress_indicator">#FF0000</color>
+
+    <!-- Divider -->
+    <color name="divider">#33FFFFFF</color>
+
+    <!-- Ripple -->
+    <color name="ripple">#33FFFFFF</color>
+
+    <!-- Transparent -->
+    <color name="transparent">#00000000</color>
+</resources>

@@ -1,0 +1,34 @@
+# Android build outputs
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Keystores - NEVER commit these
+*.jks
+*.keystore
+*.p12
+
+# Binary assets - too large for git, download via fetch_binaries.sh
+app/src/main/assets/bin/arm64-v8a/yt-dlp
+app/src/main/assets/bin/arm64-v8a/ffmpeg
+app/src/main/assets/bin/armeabi-v7a/yt-dlp
+app/src/main/assets/bin/armeabi-v7a/ffmpeg
+app/src/main/assets/bin/x86_64/yt-dlp
+app/src/main/assets/bin/x86_64/ffmpeg
+
+# Gradle wrapper jar (download with: gradle wrapper)
+gradle/wrapper/gradle-wrapper.jar
+
+# Room schemas (optional - include if you want migration tracking)
+# app/schemas/
+
+# APK outputs
+*.apk
+*.aab
