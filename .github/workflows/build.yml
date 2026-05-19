@@ -1,197 +1,21 @@
 name: Build APK
-
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:   # allows manual trigger from GitHub UI
+on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
     steps:
-
-      # ─── 1. Checkout ────────────────────────────────────────────────────────
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ─── 2. Java 17 ─────────────────────────────────────────────────────────
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      # ─── 3. Cache Gradle ────────────────────────────────────────────────────
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
-
-      # ─── 4. Cache binaries (yt-dlp + ffmpeg) ────────────────────────────────
-      - name: Cache binaries
-        id: cache-binaries
-        uses: actions/cache@v4
-        with:
-          path: app/src/main/assets/bin
-          key: binaries-${{ runner.os }}-v2
-
-      # ─── 5. Fetch yt-dlp ────────────────────────────────────────────────────
-      - name: Fetch yt-dlp binaries
-        if: steps.cache-binaries.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p app/src/main/assets/bin/arm64-v8a
-          mkdir -p app/src/main/assets/bin/armeabi-v7a
-          mkdir -p app/src/main/assets/bin/x86_64
-
-          BASE="https://github.com/yt-dlp/yt-dlp/releases/latest/download"
-
-          echo "Downloading yt-dlp for arm64-v8a..."
-          curl -fL "${BASE}/yt-dlp_linux_aarch64" \
-               -o app/src/main/assets/bin/arm64-v8a/yt-dlp
-          chmod +x app/src/main/assets/bin/arm64-v8a/yt-dlp
-
-          echo "Downloading yt-dlp for armeabi-v7a..."
-          curl -fL "${BASE}/yt-dlp_linux_armv7l" \
-               -o app/src/main/assets/bin/armeabi-v7a/yt-dlp
-          chmod +x app/src/main/assets/bin/armeabi-v7a/yt-dlp
-
-          echo "Downloading yt-dlp for x86_64..."
-          curl -fL "${BASE}/yt-dlp_linux" \
-               -o app/src/main/assets/bin/x86_64/yt-dlp
-          chmod +x app/src/main/assets/bin/x86_64/yt-dlp
-
-          echo "yt-dlp versions:"
-          app/src/main/assets/bin/arm64-v8a/yt-dlp --version || true
-
-      # ─── 6. Fetch FFmpeg ─────────────────────────────────────────────────────
-      - name: Fetch FFmpeg binaries
-        if: steps.cache-binaries.outputs.cache-hit != 'true'
-        run: |
-          # Install ffmpeg on the runner and use it for x86_64 emulator builds
-          sudo apt-get install -y ffmpeg
-          cp $(which ffmpeg) app/src/main/assets/bin/x86_64/ffmpeg
-          chmod +x app/src/main/assets/bin/x86_64/ffmpeg
-
-          # For ARM builds, download static arm64 ffmpeg from ffmpeg-kit
-          echo "Downloading FFmpeg for arm64-v8a from ffmpeg-kit..."
-
-          FFKIT_VER="6.0"
-          FFKIT_URL="https://github.com/arthenica/ffmpeg-kit/releases/download/v${FFKIT_VER}"
-
-          # Download the min (smaller) build for arm64
-          curl -fL "${FFKIT_URL}/ffmpeg-kit-min-${FFKIT_VER}-android-arm64-v8a.zip" \
-               -o /tmp/ffmpeg-kit-arm64.zip || {
-            echo "ffmpeg-kit zip failed, trying full release..."
-            curl -fL "${FFKIT_URL}/ffmpeg-kit-min-gpl-${FFKIT_VER}-android-arm64-v8a.zip" \
-                 -o /tmp/ffmpeg-kit-arm64.zip
-          }
-
-          mkdir -p /tmp/ffmpeg-arm64
-          unzip -q /tmp/ffmpeg-kit-arm64.zip -d /tmp/ffmpeg-arm64
-
-          FFMPEG_BIN=$(find /tmp/ffmpeg-arm64 -name "ffmpeg" -type f | head -1)
-
-          if [ -n "${FFMPEG_BIN}" ]; then
-            cp "${FFMPEG_BIN}" app/src/main/assets/bin/arm64-v8a/ffmpeg
-            chmod +x app/src/main/assets/bin/arm64-v8a/ffmpeg
-            echo "✓ arm64-v8a/ffmpeg extracted from ffmpeg-kit"
-          else
-            echo "ffmpeg-kit extraction failed, using runner ffmpeg as fallback..."
-            cp $(which ffmpeg) app/src/main/assets/bin/arm64-v8a/ffmpeg
-            chmod +x app/src/main/assets/bin/arm64-v8a/ffmpeg
-          fi
-
-          # armeabi-v7a: copy arm64 binary (devices are almost all 64-bit)
-          cp app/src/main/assets/bin/arm64-v8a/ffmpeg \
-             app/src/main/assets/bin/armeabi-v7a/ffmpeg
-          chmod +x app/src/main/assets/bin/armeabi-v7a/ffmpeg
-
-          echo "✓ All ffmpeg binaries ready"
-
-      # ─── 7. Verify binaries ──────────────────────────────────────────────────
-      - name: Verify binaries
-        run: |
-          echo "=== Binary inventory ==="
-          for arch in arm64-v8a armeabi-v7a x86_64; do
-            for bin in yt-dlp ffmpeg; do
-              FILE="app/src/main/assets/bin/${arch}/${bin}"
-              if [ -f "$FILE" ]; then
-                SIZE=$(du -sh "$FILE" | cut -f1)
-                echo "  ✓ ${arch}/${bin} (${SIZE})"
-              else
-                echo "  ✗ MISSING: ${arch}/${bin}"
-                exit 1
-              fi
-            done
-          done
-
-      # ─── 8. Make gradlew executable ──────────────────────────────────────────
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      # ─── 9. Build Debug APK ──────────────────────────────────────────────────
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-        env:
-          GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
-
-      # ─── 10. Upload Debug APK ────────────────────────────────────────────────
-      - name: Upload Debug APK
+      - name: Fetch binaries
+        run: bash scripts/fetch_binaries.sh
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: YTDownloader-debug-${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
-
-      # ─── 11. Build Release APK (only on main branch push) ───────────────────
-      - name: Build Release APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: ./gradlew assembleRelease --stacktrace
-        env:
-          GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
-
-      # ─── 12. Sign Release APK (only if keystore secret exists) ──────────────
-      - name: Sign Release APK
-        if: |
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          secrets.KEYSTORE_BASE64 != ''
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
-
-          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
-            --ks /tmp/release.jks \
-            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-            --ks-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
-            --key-pass "pass:${{ secrets.KEY_PASS }}" \
-            --out app/build/outputs/apk/release/YTDownloader-release-signed.apk \
-            app/build/outputs/apk/release/app-release-unsigned.apk
-
-          rm -f /tmp/release.jks
-          echo "✓ APK signed"
-
-      # ─── 13. Upload Release APK ──────────────────────────────────────────────
-      - name: Upload Release APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: YTDownloader-release-${{ github.run_number }}
-          path: |
-            app/build/outputs/apk/release/app-release-unsigned.apk
-            app/build/outputs/apk/release/YTDownloader-release-signed.apk
-          retention-days: 90
-
-      # ─── 14. Print APK info ──────────────────────────────────────────────────
-      - name: Print APK info
-        run: |
-          echo "=== Build Outputs ==="
-          find app/build/outputs/apk -name "*.apk" -exec du -sh {} \;
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
