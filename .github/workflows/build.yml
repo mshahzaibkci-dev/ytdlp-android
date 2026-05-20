@@ -1,21 +1,124 @@
 name: Build APK
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Fetch binaries
-        run: bash scripts/fetch_binaries.sh
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache binaries
+        id: cache-binaries
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/bin
+          key: binaries-${{ runner.os }}-v2
+
+      - name: Fetch yt-dlp binaries
+        if: steps.cache-binaries.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p app/src/main/assets/bin/arm64-v8a
+          mkdir -p app/src/main/assets/bin/armeabi-v7a
+          mkdir -p app/src/main/assets/bin/x86_64
+
+          BASE="https://github.com/yt-dlp/yt-dlp/releases/latest/download"
+
+          curl -fL "${BASE}/yt-dlp_linux_aarch64" -o app/src/main/assets/bin/arm64-v8a/yt-dlp
+          chmod +x app/src/main/assets/bin/arm64-v8a/yt-dlp
+
+          curl -fL "${BASE}/yt-dlp_linux_armv7l" -o app/src/main/assets/bin/armeabi-v7a/yt-dlp
+          chmod +x app/src/main/assets/bin/armeabi-v7a/yt-dlp
+
+          curl -fL "${BASE}/yt-dlp_linux" -o app/src/main/assets/bin/x86_64/yt-dlp
+          chmod +x app/src/main/assets/bin/x86_64/yt-dlp
+
+          echo "yt-dlp version: $(app/src/main/assets/bin/arm64-v8a/yt-dlp --version)"
+
+      - name: Fetch FFmpeg binaries
+        if: steps.cache-binaries.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y ffmpeg
+          cp $(which ffmpeg) app/src/main/assets/bin/x86_64/ffmpeg
+          chmod +x app/src/main/assets/bin/x86_64/ffmpeg
+
+          FFKIT_VER="6.0"
+          FFKIT_URL="https://github.com/arthenica/ffmpeg-kit/releases/download/v${FFKIT_VER}"
+
+          curl -fL "${FFKIT_URL}/ffmpeg-kit-min-${FFKIT_VER}-android-arm64-v8a.zip" \
+               -o /tmp/ffmpeg-kit-arm64.zip || \
+          curl -fL "${FFKIT_URL}/ffmpeg-kit-min-gpl-${FFKIT_VER}-android-arm64-v8a.zip" \
+               -o /tmp/ffmpeg-kit-arm64.zip || true
+
+          FFMPEG_BIN=""
+          if [ -f /tmp/ffmpeg-kit-arm64.zip ]; then
+            mkdir -p /tmp/ffmpeg-arm64
+            unzip -q /tmp/ffmpeg-kit-arm64.zip -d /tmp/ffmpeg-arm64
+            FFMPEG_BIN=$(find /tmp/ffmpeg-arm64 -name "ffmpeg" -type f | head -1)
+          fi
+
+          if [ -n "${FFMPEG_BIN}" ] && [ -f "${FFMPEG_BIN}" ]; then
+            cp "${FFMPEG_BIN}" app/src/main/assets/bin/arm64-v8a/ffmpeg
+            echo "✓ arm64 ffmpeg from ffmpeg-kit"
+          else
+            cp $(which ffmpeg) app/src/main/assets/bin/arm64-v8a/ffmpeg
+            echo "✓ arm64 ffmpeg from system (fallback)"
+          fi
+          chmod +x app/src/main/assets/bin/arm64-v8a/ffmpeg
+
+          cp app/src/main/assets/bin/arm64-v8a/ffmpeg app/src/main/assets/bin/armeabi-v7a/ffmpeg
+          chmod +x app/src/main/assets/bin/armeabi-v7a/ffmpeg
+
+      - name: Verify binaries
+        run: |
+          for arch in arm64-v8a armeabi-v7a x86_64; do
+            for bin in yt-dlp ffmpeg; do
+              FILE="app/src/main/assets/bin/${arch}/${bin}"
+              if [ -f "$FILE" ]; then
+                echo "✓ ${arch}/${bin} ($(du -sh $FILE | cut -f1))"
+              else
+                echo "✗ MISSING: ${arch}/${bin}"
+                exit 1
+              fi
+            done
+          done
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+        env:
+          GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: YTDownloader-debug-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
