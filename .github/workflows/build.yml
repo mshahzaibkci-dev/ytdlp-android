@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/bin
-          key: binaries-${{ runner.os }}-v2
+          key: binaries-v3
 
       - name: Fetch yt-dlp binaries
         if: steps.cache-binaries.outputs.cache-hit != 'true'
@@ -50,63 +50,79 @@ jobs:
           BASE="https://github.com/yt-dlp/yt-dlp/releases/latest/download"
 
           curl -fL "${BASE}/yt-dlp_linux_aarch64" -o app/src/main/assets/bin/arm64-v8a/yt-dlp
+          curl -fL "${BASE}/yt-dlp_linux_armv7l"  -o app/src/main/assets/bin/armeabi-v7a/yt-dlp
+          curl -fL "${BASE}/yt-dlp_linux"          -o app/src/main/assets/bin/x86_64/yt-dlp
+
           chmod +x app/src/main/assets/bin/arm64-v8a/yt-dlp
-
-          curl -fL "${BASE}/yt-dlp_linux_armv7l" -o app/src/main/assets/bin/armeabi-v7a/yt-dlp
           chmod +x app/src/main/assets/bin/armeabi-v7a/yt-dlp
-
-          curl -fL "${BASE}/yt-dlp_linux" -o app/src/main/assets/bin/x86_64/yt-dlp
           chmod +x app/src/main/assets/bin/x86_64/yt-dlp
 
-          echo "yt-dlp version: $(app/src/main/assets/bin/arm64-v8a/yt-dlp --version)"
+          echo "yt-dlp OK: $(app/src/main/assets/bin/x86_64/yt-dlp --version)"
 
       - name: Fetch FFmpeg binaries
         if: steps.cache-binaries.outputs.cache-hit != 'true'
         run: |
+          # Install ffmpeg from Ubuntu apt — always works on GitHub runners
+          sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-          cp $(which ffmpeg) app/src/main/assets/bin/x86_64/ffmpeg
+
+          FFMPEG_PATH=$(which ffmpeg)
+          echo "System ffmpeg: $FFMPEG_PATH"
+          file "$FFMPEG_PATH"
+
+          # Use system ffmpeg for all ABIs.
+          # This is an x86_64 binary — it works perfectly for:
+          #   - x86_64 (emulators, Chromebooks)
+          #   - The app itself runs yt-dlp/ffmpeg via ProcessBuilder on the device,
+          #     so the HOST binary here is only used as a placeholder; the actual
+          #     device binary comes from the ARM yt-dlp which bundles its own
+          #     ffmpeg calls, OR we embed a proper ARM binary below.
+          cp "$FFMPEG_PATH" app/src/main/assets/bin/x86_64/ffmpeg
           chmod +x app/src/main/assets/bin/x86_64/ffmpeg
 
-          FFKIT_VER="6.0"
-          FFKIT_URL="https://github.com/arthenica/ffmpeg-kit/releases/download/v${FFKIT_VER}"
+          # For ARM64: download a proper static ARM64 ffmpeg build
+          # Source: John Van Sickle's static builds — most reliable free source
+          # https://johnvansickle.com/ffmpeg/
+          echo "Downloading static ARM64 ffmpeg from johnvansickle.com..."
+          curl -fL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz" \
+               -o /tmp/ffmpeg-arm64.tar.xz
 
-          curl -fL "${FFKIT_URL}/ffmpeg-kit-min-${FFKIT_VER}-android-arm64-v8a.zip" \
-               -o /tmp/ffmpeg-kit-arm64.zip || \
-          curl -fL "${FFKIT_URL}/ffmpeg-kit-min-gpl-${FFKIT_VER}-android-arm64-v8a.zip" \
-               -o /tmp/ffmpeg-kit-arm64.zip || true
+          mkdir -p /tmp/ffmpeg-arm64
+          tar -xf /tmp/ffmpeg-arm64.tar.xz -C /tmp/ffmpeg-arm64 --strip-components=1
 
-          FFMPEG_BIN=""
-          if [ -f /tmp/ffmpeg-kit-arm64.zip ]; then
-            mkdir -p /tmp/ffmpeg-arm64
-            unzip -q /tmp/ffmpeg-kit-arm64.zip -d /tmp/ffmpeg-arm64
-            FFMPEG_BIN=$(find /tmp/ffmpeg-arm64 -name "ffmpeg" -type f | head -1)
-          fi
-
-          if [ -n "${FFMPEG_BIN}" ] && [ -f "${FFMPEG_BIN}" ]; then
-            cp "${FFMPEG_BIN}" app/src/main/assets/bin/arm64-v8a/ffmpeg
-            echo "✓ arm64 ffmpeg from ffmpeg-kit"
-          else
-            cp $(which ffmpeg) app/src/main/assets/bin/arm64-v8a/ffmpeg
-            echo "✓ arm64 ffmpeg from system (fallback)"
-          fi
+          cp /tmp/ffmpeg-arm64/ffmpeg app/src/main/assets/bin/arm64-v8a/ffmpeg
           chmod +x app/src/main/assets/bin/arm64-v8a/ffmpeg
+          echo "arm64 ffmpeg OK"
 
-          cp app/src/main/assets/bin/arm64-v8a/ffmpeg app/src/main/assets/bin/armeabi-v7a/ffmpeg
+          # armeabi-v7a: download armv7l static build
+          echo "Downloading static ARMv7 ffmpeg..."
+          curl -fL "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-armhf-static.tar.xz" \
+               -o /tmp/ffmpeg-armhf.tar.xz
+
+          mkdir -p /tmp/ffmpeg-armhf
+          tar -xf /tmp/ffmpeg-armhf.tar.xz -C /tmp/ffmpeg-armhf --strip-components=1
+
+          cp /tmp/ffmpeg-armhf/ffmpeg app/src/main/assets/bin/armeabi-v7a/ffmpeg
           chmod +x app/src/main/assets/bin/armeabi-v7a/ffmpeg
+          echo "armeabi-v7a ffmpeg OK"
 
-      - name: Verify binaries
+      - name: Verify all binaries
         run: |
+          echo "=== Binary inventory ==="
+          ALL_OK=true
           for arch in arm64-v8a armeabi-v7a x86_64; do
             for bin in yt-dlp ffmpeg; do
               FILE="app/src/main/assets/bin/${arch}/${bin}"
               if [ -f "$FILE" ]; then
-                echo "✓ ${arch}/${bin} ($(du -sh $FILE | cut -f1))"
+                SIZE=$(du -sh "$FILE" | cut -f1)
+                echo "  ✓ ${arch}/${bin}  ${SIZE}"
               else
-                echo "✗ MISSING: ${arch}/${bin}"
-                exit 1
+                echo "  ✗ MISSING: ${arch}/${bin}"
+                ALL_OK=false
               fi
             done
           done
+          $ALL_OK || exit 1
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
