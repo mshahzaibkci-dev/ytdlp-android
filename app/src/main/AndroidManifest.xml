@@ -2,11 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Storage - Legacy (Android 9 and below) -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
@@ -14,23 +11,13 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-
-    <!-- Media (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-
-    <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
-    <!-- Wake lock for downloads -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Vibration for notifications -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
@@ -46,7 +33,6 @@
         android:requestLegacyExternalStorage="false"
         tools:targetApi="34">
 
-        <!-- Main Activity -->
         <activity
             android:name=".ui.main.MainActivity"
             android:exported="true"
@@ -56,7 +42,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Handle YouTube share intents -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -69,24 +54,20 @@
                 <data android:scheme="https" android:host="www.youtube.com" />
                 <data android:scheme="https" android:host="youtube.com" />
                 <data android:scheme="https" android:host="youtu.be" />
-                <data android:scheme="http" android:host="www.youtube.com" />
-                <data android:scheme="http" android:host="youtube.com" />
             </intent-filter>
         </activity>
 
-        <!-- History Activity -->
         <activity
             android:name=".ui.history.HistoryActivity"
             android:exported="false"
             android:parentActivityName=".ui.main.MainActivity" />
 
-        <!-- Download Service -->
         <service
             android:name=".service.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- WorkManager initializer -->
+        <!-- Disable WorkManager default initializer — we use custom Hilt init -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -94,10 +75,10 @@
             tools:node="merge">
             <meta-data
                 android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup" />
+                android:value="androidx.startup"
+                tools:node="remove" />
         </provider>
 
-        <!-- FileProvider for sharing downloaded files -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
